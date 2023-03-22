@@ -1,0 +1,233 @@
+---
+title: "Documentação e Análise dos Resultados"
+output: html_document
+---
+
+# Introdução
+
+Esta é a documentação oficial do projeto, com as linhas de código explicadas e comentadas, e os resultados que obtivemos com as previsões.
+
+O objetivo deste projeto é realizar uma previsão de consumo de energia de carros elétricos usando Machine Learning em linguagem R.
+
+Este projeto faz parte da Formação Cientista de Dados da Data Science Academy.
+
+## Fontes de dados:
+
+https://data.mendeley.com/datasets/tb9yrptydn/2
+
+Este conjunto de dados lista todos os carros totalmente elétricos com seus atributos (propriedades) disponíveis atualmente no mercado. A coleção não contém dados sobre carros híbridos e carros elétricos dos chamados “extensores de alcance”. Os carros a hidrogênio também não foram incluídos no conjunto de dados devido ao número insuficiente de modelos produzidos em massa e à especificidade diferente (em comparação com veículo elétrico) do veículo, incluindo os diferentes métodos de carregamento.
+
+O conjunto de dados inclui carros que, a partir de 2 de dezembro de 2020, poderiam ser adquiridos na Polônia como novos em um revendedor autorizado e aqueles disponíveis em pré-venda pública e geral, mas apenas se uma lista de preços publicamente disponível com versões de equipamentos e parâmetros técnicos completos estivesse disponível. A lista não inclui carros descontinuados que não podem ser adquiridos como novos de um revendedor autorizado (também quando não estão disponíveis em estoque).
+
+O conjunto de dados de carros elétricos inclui todos os carros totalmente elétricos no mercado primário que foram obtidos de materiais oficiais (especificações técnicas e catálogos) fornecidos por fabricantes de automóveis com licença para vender carros na Polônia. Esses materiais foram baixados de seus sites oficiais. Caso os dados fornecidos pelo fabricante estivessem incompletos, as informações eram complementadas com dados do AutoCatálogo SAMAR (link disponível na seção Referências da fonte de dados).
+
+# Código explicado e comentado
+
+Importando os pacotes necessários, lendo os dados do arquivo e adicionando uma semente para reproduzir sempre os mesmos resultados nas funções aleatórias.
+
+```{r, eval=TRUE, message=FALSE, warning=FALSE}
+library(readxl)
+library(ggplot2)
+library(tidyverse)
+library(randomForest)
+library(e1071)
+library(caret)
+library(MLmetrics)
+
+dados = read_excel("FEV-data-Excel.xlsx")
+set.seed(10001)
+```
+
+Renomeando as colunas para nomes mais entendíveis, e retirando os espaços
+
+```{r}
+col_names = c("Car",
+                  "Company",
+                  "Model",
+                  "Minimal_Price_Gross",
+                  "Engine_Power_Km",
+                  "Maximum_Torque_Nm",
+                  "Type_of_Brakes",
+                  "Drive_Type",
+                  "Battery_Capacity_Kwh",
+                  "Range_WLTP_Km",
+                  "Wheelbase_Cm",
+                  "Length_Cm",
+                  "Width_Cm",
+                  "Height_Cm",
+                  "Minimal_Empty_Weight_Kg",
+                  "Permissable_Gross_Weight_Kg",
+                  "Maximun_Load_Capacity_Kg",
+                  "Number_of_Seats",
+                  "Number_of_Doors",
+                  "Tire_Size",
+                  "Maximum_Speed_Kph",
+                  "Boot_Capacity_Vda",
+                  "Acceleration_0_to_100",
+                  "Maximum_DC_Charging_Power_Kw",
+                  "Mean_Energy_Consumption_Kwh_per_100_Km")
+
+names(dados) = col_names
+```
+
+Verificando valores NA
+
+```{r}
+colSums(is.na(dados))
+dim(dados)
+```
+
+Decidimos por retirarmos as linhas com valores NA, pois como o dataset não é grande, se fôssemos imputar valores estaríamos distorcendo muito os dados, comprometendo o resultado da previsão do modelo
+
+```{r}
+dados = na.omit(dados)
+dim(dados)
+```
+
+Verificando os tipos de dados
+
+```{r}
+str(dados)
+```
+
+Transformando as variáveis categóricas em fatores
+
+```{r}
+unique(dados$Type_of_Brakes)
+dados$Type_of_Brakes = as.factor(dados$Type_of_Brakes)
+
+unique(dados$Drive_Type)
+dados$Drive_Type = as.factor(dados$Drive_Type)
+
+unique(dados$Number_of_Seats)
+dados$Number_of_Seats = as.factor(dados$Number_of_Seats)
+
+unique(dados$Number_of_Doors)
+dados$Number_of_Doors = as.factor(dados$Number_of_Doors)
+
+unique(dados$Tire_Size)
+dados$Tire_Size = as.factor(dados$Tire_Size)
+```
+
+Criando um dataframe secundário da classe data.frame, ao invés da classe tbl_df
+
+```{r}
+df = as.data.frame(dados)
+```
+
+Criando boxplot para as variáveis numéricas
+
+```{r, warning=FALSE}
+lapply(col_names, function(x){
+  if(!is.factor(df[,x]) & !is.character(df[,x])) {
+    ggplot(df, aes_string(x)) +
+      geom_boxplot() +
+      ggtitle(paste("Boxplot de",x))}})
+```
+
+Criando gráfico de barras para as variáveis do tipo fator
+
+```{r, warning=FALSE}
+lapply(col_names, function(x){
+  if(is.factor(df[,x])) {
+    ggplot(df, aes_string(x)) +
+      geom_bar() +
+      ggtitle(paste("Frequência da variável",x))}})
+```
+
+Nosso objetivo é prever o consumo de energia. Vamos verificar as variáveis mais importarntes para a previsão da variável alvo através do randomForest
+
+```{r}
+modelo_escolha_variaveis = randomForest(Mean_Energy_Consumption_Kwh_per_100_Km ~ ., data = df,
+                          ntree = 100, nodesize = 10, importance = TRUE)
+
+varImpPlot(modelo_escolha_variaveis)
+```
+
+Vamos construir o modelo apenas com as 10 variáveis mais importantes
+
+```{r}
+var_importantes = c("Minimal_Price_Gross",
+                    "Engine_Power_Km",
+                    "Maximum_Torque_Nm",
+                    "Battery_Capacity_Kwh",
+                    "Wheelbase_Cm",
+                    "Length_Cm",
+                    "Width_Cm",
+                    "Minimal_Empty_Weight_Kg",
+                    "Permissable_Gross_Weight_Kg",
+                    "Maximun_Load_Capacity_Kg",
+                    "Mean_Energy_Consumption_Kwh_per_100_Km")
+
+dados_filtrados = df[, var_importantes]
+```
+
+Criando os dados de treino e de teste
+
+```{r}
+index = createDataPartition(dados_filtrados$Mean_Energy_Consumption_Kwh_per_100_Km, p = .75, list = FALSE)
+treino = dados_filtrados[index, ]
+teste = dados_filtrados[-index, ]
+```
+
+Criação da primeira versão do modelo
+
+```{r}
+modelo_v01 = lm(Mean_Energy_Consumption_Kwh_per_100_Km ~ ., data = treino)
+predict(modelo_v01, newdata = teste[, -11])
+summary(modelo_v01)
+```
+
+Criando um data frame com os resultados observados e previstos
+
+```{r}
+previsoes_v01 = data.frame(observado = teste[, 11],
+                           previsto = predict(modelo_v01, newdata = teste[, -11]))
+```
+
+Calculando o R-Squared com o pacote Caret
+
+```{r}
+R2(previsoes_v01$previsto, previsoes_v01$observado)
+```
+
+R-Squared = 0.88
+
+Vamos testar outro algoritmo, o Support Vector Machine (SVM)
+
+```{r}
+modelo_v02 = svm(Mean_Energy_Consumption_Kwh_per_100_Km ~ ., data = treino)
+predict(modelo_v02, newdata = teste[, -11])
+summary(modelo_v02)
+
+previsoes_v02 = data.frame(observado = teste[, 11],
+                           previsto = predict(modelo_v02, newdata = teste[, -11]))
+
+R2(previsoes_v02$previsto, previsoes_v02$observado)
+```
+
+R-Squared = 0.89
+
+O SVM teve um resultado parecido, mas um pouco melhor do que o primeiro modelo que tínhamos criado.
+
+Vamos testar mais um algoritmo, o Random Forest.
+
+```{r}
+modelo_v03 = randomForest(Mean_Energy_Consumption_Kwh_per_100_Km ~ ., data = treino)
+predict(modelo_v03, newdata = teste[, -11])
+
+previsoes_v03 = data.frame(observado = teste[, 11],
+                           previsto = predict(modelo_v03, newdata = teste[, -11]))
+
+R2(previsoes_v03$previsto, previsoes_v03$observado)
+```
+
+R-Squared = 0.86
+
+Um bom valor, mas inferior ao que obtivemos usando o SVM
+
+O nosso melhor modelo foi feito com o SVM. Estas são as suas previsões:
+
+```{r}
+print(previsoes_v02)
+```

@@ -1,4 +1,3 @@
-install.packages("MLmetrics")
 library(readxl)
 library(ggplot2)
 library(tidyverse)
@@ -6,7 +5,6 @@ library(randomForest)
 library(e1071)
 library(caret)
 library(MLmetrics)
-library(pROC)
 
 # Lendo os dados
 dados = read_excel("FEV-data-Excel.xlsx")
