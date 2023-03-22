@@ -18,3 +18,9 @@ materiais foram baixados de seus sites oficiais. Caso os dados fornecidos pelo f
 ### Objetivo do projeto
 
 O objetivo deste projeto é construir um modelo de Machine Learning que seja capaz de prever o consumo de energia de veículos elétricos.
+
+### Documentação e Resutados
+
+A documentação do projeto está disponível no link:
+
+https://rpubs.com/CoelhoPedro/1018739
